@@ -174,8 +174,96 @@ def norm_long(df_meta, df_p, var, renamed_var='', drop_var=[], drop_mutation=[],
     
     return df_long
      
-     
+
+def extract_clustered_table(res, data):
+    """
+    input
+    =====
+    res:     <sns.matrix.ClusterGrid>  the clustermap object
+    data:    <pd.DataFrame>            input table
     
+    output
+    ======
+    returns: <pd.DataFrame>            reordered input table
+    """
+    
+    # if sns.clustermap is run with row_cluster=False:
+    if res.dendrogram_col is None:
+        print("Apparently, columns were not clustered.")
+        return -1
+    
+    if res.dendrogram_row is not None:
+        # reordering index and columns
+        new_cols = data.columns[res.dendrogram_col.reordered_ind]
+        new_ind = data.index[res.dendrogram_row.reordered_ind]
+        
+        return data.loc[new_ind, new_cols]
+    
+    else:
+        # reordering the columns
+        new_cols = data.columns[res.dendrogram_col.reordered_ind]
+
+        return data.loc[:,new_cols]
+    
+def bubble_heatmap(res, data, var_type, cmap='yellowgreenblue', cmap_domain=[]):
+    '''
+    Creates a heatmap with bubbles depicting population size.
+
+    Parameters
+    ----------
+    res : sns.matrix.ClusterGrid
+        Seaborn clustermap object.
+    data : pd.DataFrame
+        Input table.
+    var_type : str
+        Variable type for y. Options are 'quantitative', 'ordinal', 'nominal',.
+    cmap : str, optional
+        Altair color scheme. The default is 'yellowgreenblue'.
+    cmap_domain : list with 2 values, optional
+         Max and min values for colormap. The default is []. If not inputted, will default to min and max values of data.
+
+    Returns
+    -------
+    altair.LayerChart
+        Altair heatmap with bubbles depicting population size.
+
+    '''
+    import altair as alt 
+    
+    # get ordered table
+    res_ordered = extract_clustered_table(res, data)
+    
+    # get variable name and axis title
+    var = res_ordered.index.name
+    var_title = var.rsplit(' ', 1)[0]
+    
+    # create long form of data
+    l = res_ordered.reset_index().melt(var, value_name='Fraction')
+    
+    # get domain for cmap
+    if cmap_domain == []:
+        cmap_domain = [min(l['Fraction']), max(l['Fraction'])]
+    
+    # create grid for heatmap
+    b = alt.Chart(l).mark_rect(stroke='lightgray', fill=None).encode(
+        x = alt.X('Mutation:N', sort=None),
+        y = alt.Y(var, type=var_type, sort=None)
+    ).properties(
+        width=800,
+        height= ((800/len(res_ordered.columns)) * len(res_ordered.index)),
+        title= 'Heatmap of {var_name}, Normalized by Mutations and {var_name}'.format(var_name=var_title)   
+    )
+      
+    # create bubbles for heatmap
+    c = alt.Chart(l).mark_circle().encode(
+        x = alt.X('Mutation:N', sort=None),
+        y = alt.Y(var, type=var_type, sort=None).title(var_title),
+        size=alt.Size('Fraction:Q').scale(domain=cmap_domain, range=[1000,6500]),
+        color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain),
+        tooltip=['Mutation', var, 'Fraction']
+    ) 
+    
+    return (b+c).configure(background='white')
     
 
     
