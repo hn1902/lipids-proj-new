@@ -205,7 +205,7 @@ def extract_clustered_table(res, data):
 
         return data.loc[:,new_cols]
     
-def bubble_heatmap(res, data, var_type, cmap='yellowgreenblue', cmap_domain=[]):
+def bubble_heatmap(res, data, var_type, title, cmap='yellowgreenblue', cmap_domain=[], domain_mid=0):
     '''
     Creates a heatmap with bubbles depicting population size.
 
@@ -216,11 +216,15 @@ def bubble_heatmap(res, data, var_type, cmap='yellowgreenblue', cmap_domain=[]):
     data : pd.DataFrame
         Input table.
     var_type : str
-        Variable type for y. Options are 'quantitative', 'ordinal', 'nominal',.
+        Variable type for y. Options are 'quantitative', 'ordinal', 'nominal'.
+    title : str
+        Chart title
     cmap : str, optional
         Altair color scheme. The default is 'yellowgreenblue'.
     cmap_domain : list with 2 values, optional
-         Max and min values for colormap. The default is []. If not inputted, will default to min and max values of data.
+        Max and min values for colormap. The default is []. If not inputted, will default to min and max values of data.
+    domain_mid : int
+        Midpoint of colormap
 
     Returns
     -------
@@ -251,22 +255,81 @@ def bubble_heatmap(res, data, var_type, cmap='yellowgreenblue', cmap_domain=[]):
     ).properties(
         width=800,
         height= ((800/len(res_ordered.columns)) * len(res_ordered.index)),
-        title= 'Heatmap of {var_name}, Normalized by Mutations and {var_name}'.format(var_name=var_title)   
+        title=title  
     )
       
     # create bubbles for heatmap
     c = alt.Chart(l).mark_circle().encode(
         x = alt.X('Mutation:N', sort=None),
         y = alt.Y(var, type=var_type, sort=None).title(var_title),
-        size=alt.Size('Fraction:Q').scale(domain=cmap_domain, range=[1000,6500]),
-        color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain),
+        size=alt.Size('Fraction:Q').scale(domain=cmap_domain, domainMid=domain_mid, range=[1000,6500]),
+        color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain, domainMid = domain_mid),
         tooltip=['Mutation', var, 'Fraction']
     ) 
     
     return (b+c).configure(background='white')
     
 
+def relative_norm(df_meta, df_p, var, norm_mtn, renamed_var='', drop_var=[], drop_mutation=[], norm_exp=True, norm_var=True):
+    '''
+    Returns the groupby for a dataset when comparing by specific lipid qualities (ex: chain length, head group, unsaturation).
+    Data is normalized by column and row. 
+
+    Parameters
+    -----------
+    df_meta: dataframe
+        Dataframe with lipid metadata (sample name, head group, chain length, unsaturation)
+    df_p: dataframe
+        Dataframe with columns named by mutation, rather than individual experiments
+    var: str
+        Column name for variable of interest (ex: 'Head Group 2')
+    norm_mtn: str
+        Column name for mutation to set at 0. Normalize other mutations relative to this column.
+    renamed_var: str, optional, default '""'
+        Rename variable column to this string (ex: if var is 'Head Group 2', renamed_var is 'Head Group')
+    drop_var: list, optional, default '[]'
+        Variables (rows) to exclude (ex: PE, PC). 
+        Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
+    drop_mutation: list, optional, default '[]'
+        Mutations (columns) to be dropped (ex: WT). Pass list of column names to drop.
+        Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
+    norm_exp: bool, optional, deafult 'True'
+        Whether or not to normalize by mutation (down the column).
+    norm_var: bool, optional, default 'True'
+        Whether or not to normalize by variable (across the row).
+    '''
     
+    # create merged df with variable of interest
+    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name')
     
+    # group by variable of interest
+    df = df.groupby(var).sum()
+
+    # normalize by the experiment (down the columns)
+    if norm_exp:
+        df = norm_col(df)
+        
+    # drop rows and columns
+    if drop_var != []:
+        df = df[~df.index.isin(drop_var)]
+    if drop_mutation != []:
+        df = df.drop(columns=drop_mutation)
+    
+    # name columns so that we can group by them once transposed
+    df.columns.names = ['Mutation']
+    # rename index
+    if renamed_var != '':
+        df.index.names = ['renamed_var']
+        
+    # transpose and then find the average value for each mutation
+    df = df.T.groupby('Mutation').mean()
+    
+    # transpose again so variable is in the row and mutation is in the columns
+    df = df.T
+    # normalize by the variable
+    if norm_var:
+        df = norm_row(df)
+        
+    return df
     
     
