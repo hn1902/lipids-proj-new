@@ -270,7 +270,7 @@ def bubble_heatmap(res, data, var_type, title, cmap='yellowgreenblue', cmap_doma
     return (b+c).configure(background='white')
     
 
-def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[], drop_mutation=[], outlier=True, norm_exp=True):
+def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[], drop_mutation=[], outlier=True, norm_exp=True, cbar_args={}):
     '''
     Creates a seaborn heatmap of the log(fold change), with outliers. Also returns a dataframe of the log(fold change)
     Data is normalized by column.
@@ -365,12 +365,21 @@ def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[
     cmap.set_under('yellow')    # add color for neg outliers
     
     # get args for colorbar
-    vmin=non_inf_min
-    vmax=non_inf_max
+    cbar = {}
+    cbar['vmax'] = non_inf_max
+    cbar['vmin'] = non_inf_min
+    cbar['tmin'] = truncate(cbar['vmin'])
+    cbar['tmax'] = truncate(cbar['vmax'])
+    
+    # replace with manual oversets if given
+    for key in cbar_args.keys():
+        cbar[key] = cbar_args[key]
+    
+    # set cbar args
+    vmin=cbar['vmin']
+    vmax=cbar['vmax']
     norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)    # set center of colorbar at 0
-    tmin = truncate(vmin)    # get end tick for min
-    tmax = truncate(vmax)    # get end tick for max
-    ticks = [tmin, tmin/2, 0, tmax/2, tmax]    # set colorbar ticks
+    ticks = [cbar['tmin'], cbar['tmin']/2, 0, cbar['tmax']/2, cbar['tmax']]    # set colorbar ticks
     cbar_kws = {'ticks' : ticks}
     if outlier:
         cbar_kws['extend'] = 'both'
