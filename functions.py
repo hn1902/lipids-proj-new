@@ -270,10 +270,10 @@ def bubble_heatmap(res, data, var_type, title, cmap='yellowgreenblue', cmap_doma
     return (b+c).configure(background='white')
     
 
-def relative_norm(df_meta, df_p, var, norm_mtn, renamed_var='', drop_var=[], drop_mutation=[], norm_exp=True, norm_var=True):
+def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[], drop_mutation=[], outlier=True, norm_exp=True):
     '''
-    Returns the groupby for a dataset when comparing by specific lipid qualities (ex: chain length, head group, unsaturation).
-    Data is normalized by column and row. 
+    Creates a seaborn heatmap of the log(fold change), with outliers. Also returns a dataframe of the log(fold change)
+    Data is normalized by column.
 
     Parameters
     -----------
@@ -283,8 +283,10 @@ def relative_norm(df_meta, df_p, var, norm_mtn, renamed_var='', drop_var=[], dro
         Dataframe with columns named by mutation, rather than individual experiments
     var: str
         Column name for variable of interest (ex: 'Head Group 2')
-    norm_mtn: str
+    mtn: str
         Column name for mutation to set at 0. Normalize other mutations relative to this column.
+    row_cluster : boolean
+        If True, will cluster rows in heatmap.
     renamed_var: str, optional, default '""'
         Rename variable column to this string (ex: if var is 'Head Group 2', renamed_var is 'Head Group')
     drop_var: list, optional, default '[]'
@@ -293,11 +295,21 @@ def relative_norm(df_meta, df_p, var, norm_mtn, renamed_var='', drop_var=[], dro
     drop_mutation: list, optional, default '[]'
         Mutations (columns) to be dropped (ex: WT). Pass list of column names to drop.
         Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
-    norm_exp: bool, optional, deafult 'True'
-        Whether or not to normalize by mutation (down the column).
-    norm_var: bool, optional, default 'True'
-        Whether or not to normalize by variable (across the row).
+    norm_exp: bool, optional, default 'True'
+        Whether or not to normalize by column (across the row).
+    outlier : boolean
+        Whether to replace inf with outliers or with max/min values
+        
+    Returns
+    -------
+    df: pandas.DataFrame
+        Dataframe of log(fold change) values.
     '''
+    
+    # import modules
+    import numpy as np
+    import matplotlib
+    import seaborn as sns
     
     # create merged df with variable of interest
     df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name')
@@ -319,17 +331,72 @@ def relative_norm(df_meta, df_p, var, norm_mtn, renamed_var='', drop_var=[], dro
     df.columns.names = ['Mutation']
     # rename index
     if renamed_var != '':
-        df.index.names = ['renamed_var']
+        df.index.names = [renamed_var]
+        var = renamed_var
         
     # transpose and then find the average value for each mutation
     df = df.T.groupby('Mutation').mean()
     
     # transpose again so variable is in the row and mutation is in the columns
     df = df.T
-    # normalize by the variable
-    if norm_var:
-        df = norm_row(df)
+    
+    # get fold change
+    df = df.div(df[mtn], axis=0)    # calculate fold change
+    df.fillna(1, inplace=True)    # replace NaN (0/0) values with 1
+    non_inf_max = max(df[df != np.inf].max())    # find max fold chage to replace infinities
+    if outlier:
+        df.replace(np.inf, non_inf_max **10, inplace=True)    # replace pos infinities with obvious outlier
+    else:
+        df.replace(np.inf, non_inf_max, inplace=True)    # replace pos infinities with max
         
-    return df
+    
+    # get log of fold change
+    df = np.log(df)
+    non_inf_min = min(df[df != -np.inf].min())    # find minimum fold change
+    non_inf_max=np.log(non_inf_max)    # change non_inf_max to log form
+    if outlier:
+        df.replace(-np.inf, non_inf_min*10, inplace=True)    # replace neg inf with obvious outlier
+    else:
+        df.replace(-np.inf, non_inf_min, inplace=True)    # replace neg inf with minimum
+    
+    # plot heatmap -- get colormap
+    cmap = matplotlib.colormaps['RdBu']    # set colormap
+    cmap.set_over('green')    # add color for pos outliers
+    cmap.set_under('yellow')    # add color for neg outliers
+    
+    # get args for colorbar
+    vmin=non_inf_min
+    vmax=non_inf_max
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)    # set center of colorbar at 0
+    tmin = truncate(vmin)    # get end tick for min
+    tmax = truncate(vmax)    # get end tick for max
+    ticks = [tmin, tmin/2, 0, tmax/2, tmax]    # set colorbar ticks
+    cbar_kws = {'ticks' : ticks}
+    if outlier:
+        cbar_kws['extend'] = 'both'
+    
+    # plot heatmap
+    sns.set(sns.set(rc={"figure.facecolor": "white"}))    # add background color for graph
+    sns.clustermap(
+        df, 
+        cmap=cmap,
+        norm=norm,
+        cbar=True, cbar_kws=cbar_kws, 
+        vmin=vmin, 
+        vmax=vmax, 
+        row_cluster=row_cluster, 
+    ).fig.suptitle(
+            'Heatmap of {var_name}, log(Fold Change from CAS9)'.format(var_name=var), 
+            y=1.05
+    )
+                                                   
+    return df, non_inf_max, non_inf_min
+
+def truncate(x):
+    import math
+    dec = abs(math.floor(math.log10(abs(x))))
+    return int(x * 10**dec) / 10**dec
+    
+    
     
     
