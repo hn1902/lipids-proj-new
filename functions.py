@@ -76,7 +76,7 @@ def groupby_norm(df_meta, df_p, var, renamed_var='', drop_var=[], drop_mutation=
     '''
     
     # create merged df with variable of interest
-    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name')
+    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name').set_index('Sample Name')
     
     # group by variable of interest
     df = df.groupby(var).sum()
@@ -95,7 +95,7 @@ def groupby_norm(df_meta, df_p, var, renamed_var='', drop_var=[], drop_mutation=
     df.columns.names = ['Mutation']
     # rename index
     if renamed_var != '':
-        df.index.names = ['renamed_var']
+        df.index.names = [renamed_var]
         
     # transpose and then find the average value for each mutation
     df = df.T.groupby('Mutation').mean()
@@ -144,7 +144,7 @@ def norm_long(df_meta, df_p, var, renamed_var='', drop_var=[], drop_mutation=[],
 
     '''
     # merge raw data wiht lipid metadata
-    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name')
+    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name').set_index('Sample Name')
     
     # group by variable
     df = df.groupby(var).sum()
@@ -296,7 +296,7 @@ def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[
         Mutations (columns) to be dropped (ex: WT). Pass list of column names to drop.
         Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
     norm_exp: bool, optional, default 'True'
-        Whether or not to normalize by column (across the row).
+        Whether or not to normalize by experiment (down the column).
     outlier : boolean
         Whether to replace inf with outliers or with max/min values
         
@@ -312,7 +312,7 @@ def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[
     import seaborn as sns
     
     # create merged df with variable of interest
-    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name')
+    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name').set_index('Sample Name')
     
     # group by variable of interest
     df = df.groupby(var).sum()
