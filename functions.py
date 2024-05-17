@@ -262,8 +262,8 @@ def bubble_heatmap(res, data, var_type, title, cmap='yellowgreenblue', cmap_doma
     c = alt.Chart(l).mark_circle().encode(
         x = alt.X('Mutation:N', sort=None),
         y = alt.Y(var, type=var_type, sort=None).title(var_title),
-        size=alt.Size('Fraction:Q').scale(domain=cmap_domain, domainMid=domain_mid, range=[1000,6500]),
-        color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain, domainMid = domain_mid),
+        size=alt.Size('abs(Fraction):Q').scale(domain=cmap_domain, domainMid=domain_mid, range=[1000,6500]),
+        color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain, domainMid=domain_mid),
         tooltip=['Mutation', var, 'Fraction']
     ) 
     
