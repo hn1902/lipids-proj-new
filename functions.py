@@ -262,7 +262,7 @@ def bubble_heatmap(res, data, var_type, title, cmap='yellowgreenblue', cmap_doma
     c = alt.Chart(l).mark_circle().encode(
         x = alt.X('Mutation:N', sort=None),
         y = alt.Y(var, type=var_type, sort=None).title(var_title),
-        size=alt.Size('abs(Fraction):Q').scale(domain=cmap_domain, domainMid=domain_mid, range=[1000,6500]),
+        size=alt.Size('Fraction:Q').scale(domain=cmap_domain, domainMid=domain_mid, range=[1000,6500]),
         color=alt.Color('Fraction:Q').scale(scheme=cmap, domain=cmap_domain, domainMid=domain_mid),
         tooltip=['Mutation', var, 'Fraction']
     ) 
@@ -348,7 +348,7 @@ def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[
         df.replace(np.inf, non_inf_max **10, inplace=True)    # replace pos infinities with obvious outlier
     else:
         df.replace(np.inf, non_inf_max, inplace=True)    # replace pos infinities with max
-        
+
     
     # get log of fold change
     df = np.log(df)
@@ -405,7 +405,169 @@ def truncate(x):
     import math
     dec = abs(math.floor(math.log10(abs(x))))
     return int(x * 10**dec) / 10**dec
+
+def z_score(df_meta, df_p, var, ctrl, row_cluster, renamed_var='', drop_var=[], drop_mutation=[], outlier=True, norm_exp=True, cbar_args={}):
+    '''
+    Creates a seaborn heatmap of the z-score, with outliers. Also returns a dataframe of the z-scores
+    Data is normalized by column.
+
+    Parameters
+    -----------
+    df_meta: dataframe
+        Dataframe with lipid metadata (sample name, head group, chain length, unsaturation)
+    df_p: dataframe
+        Dataframe with columns named by mutation, rather than individual experiments
+    var: str
+        Column name for variable of interest (ex: 'Head Group 2')
+    mtn: str
+        Column name for mutation to set at 0. Normalize other mutations relative to this column.
+    row_cluster : boolean
+        If True, will cluster rows in heatmap.
+    renamed_var: str, optional, default '""'
+        Rename variable column to this string (ex: if var is 'Head Group 2', renamed_var is 'Head Group')
+    drop_var: list, optional, default '[]'
+        Variables (rows) to exclude (ex: PE, PC). 
+        Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
+    drop_mutation: list, optional, default '[]'
+        Mutations (columns) to be dropped (ex: WT). Pass list of column names to drop.
+        Will be dropped after normalization by mutation (down column) but before normalization by variable (across row).
+    norm_exp: bool, optional, default 'True'
+        Whether or not to normalize by experiment (down the column).
+    outlier : boolean
+        Whether to replace inf with outliers or with max/min values
+        
+    Returns
+    -------
+    dfz: pandas.DataFrame
+        Dataframe of z-scores.
+    '''
+    # import modules
+    import numpy as np
+    import matplotlib
+    import seaborn as sns
+
+    # create merged df with variable of interest
+    df = df_meta[['Sample Name', var]].merge(df_p, on='Sample Name').set_index('Sample Name')
+
+    # group by variable of interest
+    df = df.groupby(var).sum()
+
+    # normalize by the experiment (down the columns)
+    if norm_exp:
+        df = norm_col(df)
+
+    # drop rows and columns
+    if drop_var != []:
+        df = df[~df.index.isin(drop_var)]
+    if drop_mutation != []:
+        df = df.drop(columns=drop_mutation)
+
+    # name columns so that we can group by them once transposed
+    df.columns.names = ['Mutation']
+    # rename index
+    if renamed_var != '':
+        df.index.names = [renamed_var]
+        var = renamed_var
+
+    # transpose and then find the average value & standard error 
+    dfm = df.T.groupby('Mutation').mean().T
+    dfm.head()
+
+    # find standard error for each mutation
+    dfse = df.T.groupby('Mutation').sem().T
+    dfse.head()
+
+    # calculate z-score
+    dfm = dfm.sub(dfm[ctrl], axis=0) # numerator
+    dfse = dfse ** 2 # denominator
+    dfse = np.sqrt(dfse.add(dfse[ctrl], axis=0))
+    dfz = dfm/dfse
+
+    # dfz formatting
+    dfz.fillna(1, inplace=True) # replace NaN (0/0) with 1
+    non_inf_max = max(dfz[dfz != np.inf].max())    # find max fold chage to replace infinities
+    non_inf_min = min(dfz[dfz != -np.inf].min())    # find minimum
+    if outlier:
+        df.replace(np.inf, non_inf_max **10, inplace=True)    # replace pos infinities with obvious outlier
+        df.replace(-np.inf, non_inf_min*10, inplace=True)    # replace neg inf with obvious outlier
+    else:
+        df.replace(np.inf, non_inf_max, inplace=True)    # replace pos infinities with max
+        df.replace(-np.inf, non_inf_min, inplace=True)    # replace neg inf with minimum
+
+    # plot heatmap -- get colormap
+    cmap = matplotlib.colormaps['PRGn']    # set colormap
+    cmap.set_over('blue')    # add color for pos outliers
+    cmap.set_under('red')    # add color for neg outliers
+
+    # get args for colorbar
+    cbar = {}
+    cbar['vmax'] = non_inf_max
+    cbar['vmin'] = non_inf_min
+    cbar['tmin'] = truncate(cbar['vmin'])
+    cbar['tmax'] = truncate(cbar['vmax'])
+
+    # replace with manual oversets if given
+    for key in cbar_args.keys():
+        cbar[key] = cbar_args[key]
+
+    # set cbar args
+    vmin=cbar['vmin']
+    vmax=cbar['vmax']
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)    # set center of colorbar at 0
+    ticks = [cbar['tmin'], cbar['tmin']/2, 0, cbar['tmax']/2, cbar['tmax']]    # set colorbar ticks
+    cbar_kws = {'ticks' : ticks}
+    if outlier:
+        cbar_kws['extend'] = 'both'
+
+    # plot heatmap
+    sns.set(sns.set(rc={"figure.facecolor": "white"}))    # add background color for graph
+    sns.clustermap(
+        dfz, 
+        cmap=cmap,
+        norm=norm,
+        cbar=True, cbar_kws=cbar_kws, 
+        vmin=vmin, 
+        vmax=vmax, 
+        row_cluster=row_cluster, 
+    ).fig.suptitle(
+            '{var_name} Z-Score When Compared to {control}'.format(var_name=var, control=ctrl), 
+            y=1.05
+    )
     
-    
-    
-    
+def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purplegreen', cmap_mid=0):
+    '''
+    Creates an altair heatmap from a fold change or z-score dataframe.
+
+    Parameters
+    -----------
+    dfz : dataframe
+        Dataframe with z-score or fold change data
+    var : str
+        Column name for variable of interest
+    var_type : str
+        Variable type for y. Options are 'quantitative', 'ordinal', 'nominal'.
+    val: str
+        Name for value of interest (ex: Z-Score, log(Fold Change))
+    title : str
+        Chart title
+    subtitle: str, optional
+        Chart subtitle
+    cmap : str, optional
+        Altair color scheme. The default is 'purplegreen'.
+    cmap_mid : int
+        Midpoint of colormap
+    '''
+    import altair as alt
+
+    source = dfz.reset_index().melt('Head Group', value_name=val)
+
+    alt.Chart(source).mark_rect().encode(
+        x='Mutation:N',
+        y=alt.Y(var, type=var_type),
+        color=alt.Color(val, type='quantitative').scale(scheme=cmap, domainMid=cmap_mid),
+        tooltip=['Mutation', var, 'Z-Score']
+    ).properties(
+        height=500,
+        width=500,
+        title={'text':title, 'subtitle':subtitle}
+    )
