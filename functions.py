@@ -484,40 +484,34 @@ def z_score(df_meta, df_p, var, ctrl, row_cluster, renamed_var='', drop_var=[], 
     dfz = dfm/dfse
 
     # dfz formatting
-    dfz.fillna(1, inplace=True) # replace NaN (0/0) with 1
+    dfz.fillna(0, inplace=True) # replace NaN (0/0) with 1
     non_inf_max = max(dfz[dfz != np.inf].max())    # find max fold chage to replace infinities
     non_inf_min = min(dfz[dfz != -np.inf].min())    # find minimum
     if outlier:
-        df.replace(np.inf, non_inf_max **10, inplace=True)    # replace pos infinities with obvious outlier
-        df.replace(-np.inf, non_inf_min*10, inplace=True)    # replace neg inf with obvious outlier
+        dfz.replace(np.inf, non_inf_max **10, inplace=True)    # replace pos infinities with obvious outlier
+        dfz.replace(-np.inf, non_inf_min*10, inplace=True)    # replace neg inf with obvious outlier
     else:
-        df.replace(np.inf, non_inf_max, inplace=True)    # replace pos infinities with max
-        df.replace(-np.inf, non_inf_min, inplace=True)    # replace neg inf with minimum
+        dfz.replace(np.inf, non_inf_max, inplace=True)    # replace pos infinities with max
+        dfz.replace(-np.inf, non_inf_min, inplace=True)    # replace neg inf with minimum
 
     # plot heatmap -- get colormap
-    cmap = matplotlib.colormaps['PRGn']    # set colormap
-    cmap.set_over('blue')    # add color for pos outliers
-    cmap.set_under('red')    # add color for neg outliers
+    if ((-2 <= dfz) & (dfz <= 2)).all().all():
+        cmap = matplotlib.colormaps['PRGn']
 
-    # get args for colorbar
-    cbar = {}
-    cbar['vmax'] = non_inf_max
-    cbar['vmin'] = non_inf_min
-    cbar['tmin'] = truncate(cbar['vmin'])
-    cbar['tmax'] = truncate(cbar['vmax'])
+        # set cbar args
+        norm = matplotlib.colors.TwoSlopeNorm(vmin=-2, vcenter=0, vmax=2)    # set center of colorbar at 0
+        ticks = [-2, -1, 0, 1, 2]    # set colorbar ticks
+        cbar_kws = {'ticks' : ticks}
 
-    # replace with manual oversets if given
-    for key in cbar_args.keys():
-        cbar[key] = cbar_args[key]
-
-    # set cbar args
-    vmin=cbar['vmin']
-    vmax=cbar['vmax']
-    norm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)    # set center of colorbar at 0
-    ticks = [cbar['tmin'], cbar['tmin']/2, 0, cbar['tmax']/2, cbar['tmax']]    # set colorbar ticks
-    cbar_kws = {'ticks' : ticks}
-    if outlier:
-        cbar_kws['extend'] = 'both'
+    else:
+        levels = [-30, -20, -10, -2, 2, 10, 20, 30]
+        if outlier:
+            colors = sns.color_palette('PRGn', 9)
+            cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors, extend='both')
+        else:
+            colors = sns.color_palette('PRGn', 7) 
+            cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors)
+        cbar_kws = {'ticks' : levels}
 
     # plot heatmap
     sns.set(sns.set(rc={"figure.facecolor": "white"}))    # add background color for graph
@@ -525,14 +519,15 @@ def z_score(df_meta, df_p, var, ctrl, row_cluster, renamed_var='', drop_var=[], 
         dfz, 
         cmap=cmap,
         norm=norm,
-        cbar=True, cbar_kws=cbar_kws, 
-        vmin=vmin, 
-        vmax=vmax, 
+        cbar=True, 
+        cbar_kws=cbar_kws, 
         row_cluster=row_cluster, 
     ).fig.suptitle(
-            '{var_name} Z-Score When Compared to {control}'.format(var_name=var, control=ctrl), 
+            '{var_name} Two-Sample Z-Test Compared to {control}'.format(var_name=var, control=ctrl), 
             y=1.05
     )
+
+    return dfz
     
 def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purplegreen', cmap_mid=0):
     '''
