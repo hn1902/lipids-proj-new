@@ -554,7 +554,7 @@ def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purpleg
     '''
     import altair as alt
 
-    source = dfz.reset_index().melt('Head Group', value_name=val)
+    source = dfz.reset_index().melt(var, value_name=val)
 
     alt.Chart(source).mark_rect().encode(
         x='Mutation:N',
