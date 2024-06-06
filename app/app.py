@@ -37,12 +37,12 @@ with ui.nav_panel("Upload Data"):
     ui.input_file(
         "header", "Select header file (optional)", accept=[".csv"], multiple=False
     )
-    ui.input_file(
-        "lipid_data",
-        "Select lipid metadata file (optional)",
-        accept=[".csv"],
-        multiple=False,
-    )
+    # ui.input_file(
+    #     "lipid_data",
+    #     "Select lipid metadata file (optional)",
+    #     accept=[".csv"],
+    #     multiple=False,
+    # )
     ui.input_numeric("num_idx", "How many columns contain lipid information?", 1)
     ui.input_text("idx_col", "Which column contains individual lipid species?")
     ui.input_numeric("num_col_lvls", "How many levels are there in your header?", 1)
@@ -79,6 +79,7 @@ with ui.nav_panel("Upload Data"):
                     if w >= 0:
                         df.rename(columns=header[w], inplace=True) # rename based on column level
                 df = df.iloc[(input.num_col_lvls() - 1) :]  # drop rows with col names
+                df.columns.name = 'Mutation'
                 df.fillna(0, inplace=True)
                 df.reset_index(inplace=True)
                 return df
@@ -102,69 +103,69 @@ with ui.nav_panel("Upload Data"):
                         header = pd.read_csv(h['datapath'])
                 return header
             
-        # @reactive.calc
-        # def df_meta_func():
-        #     df = df_func()
-        #     if df is None:
-        #         return
-        #     else:
-        #         row_list = []
-        #         for name in df["Sample Name"]:
-        #             # split sample name string
-        #             qual = re.split(' |:|;', name)
-        #             # get head group, chain length, unsaturation
-        #             head_group = qual[0]
-        #             # get chain length
-        #             chain_length = qual[1]
-        #             if "-" in chain_length:
-        #                 c = chain_length.split(sep="-")
-        #                 chain_length = c[1]
-        #                 head_group += " " + c[0]
-        #             chain_length = int(chain_length)
-        #             # get unsaturation
-        #             unsaturation = qual[2]
-        #             if "+" in unsaturation:
-        #                 u = unsaturation.split(sep="+")
-        #                 unsaturation = u[0] 
-        #             unsaturation = int(unsaturation)
-        #             # create dict for row and then add to list of rows if not already in there
-        #             row = {"Sample Name":name, 
-        #                 "Head Group":head_group, 
-        #                 "Acyl Chain Length":chain_length, 
-        #                 "Unsaturation":unsaturation}
-        #             if row not in row_list:
-        #                 row_list.append(row)
-        #         df_meta = pd.DataFrame(row_list)
+        @reactive.calc
+        def df_meta_func():
+            df = df_func()
+            if df is None:
+                return
+            else:
+                row_list = []
+                for name in df["Sample Name"]:
+                    # split sample name string
+                    qual = re.split(' |:|;', name)
+                    # get head group, chain length, unsaturation
+                    head_group = qual[0]
+                    # get chain length
+                    chain_length = qual[1]
+                    if "-" in chain_length:
+                        c = chain_length.split(sep="-")
+                        chain_length = c[1]
+                        head_group += " " + c[0]
+                    chain_length = int(chain_length)
+                    # get unsaturation
+                    unsaturation = qual[2]
+                    if "+" in unsaturation:
+                        u = unsaturation.split(sep="+")
+                        unsaturation = u[0] 
+                    unsaturation = int(unsaturation)
+                    # create dict for row and then add to list of rows if not already in there
+                    row = {"Sample Name":name, 
+                        "Head Group":head_group, 
+                        "Acyl Chain Length":chain_length, 
+                        "Unsaturation":unsaturation}
+                    if row not in row_list:
+                        row_list.append(row)
+                df_meta = pd.DataFrame(row_list)
 
-        #         #head group metadata - list of original head groups
-        #         hg_list = df_meta['Head Group'].unique()
-        #         # list of head groups metadata
-        #         hg2_list = []
-        #         for hg in hg_list:
-        #             # first sort the O groups (ex: PC, PC O)
-        #             if " " in hg:
-        #                 hg2 = hg.split(" ")[0]    
-        #             # sort the 1/2/3 groups(GD, GT)
-        #             elif hg[-1] in ['1', '2', '3']:
-        #                 hg2 = hg[:-1]
-        #             # get the hexcer
-        #             elif 'Hex' in hg:
-        #                 hg2 = 'Hex_Cer'  
-        #             # get the acylglycerols
-        #             elif hg in 'DAG,TAG,MAG':
-        #                 hg2='DAG,TAG,MAG'
-        #             # all others    
-        #             else:
-        #                 hg2 = hg
-        #             hg2_list.append(hg2)
-        #         df_hg = pd.DataFrame({'Head Group': hg_list, 'Head Group 2': hg2_list})
+                #head group metadata - list of original head groups
+                hg_list = df_meta['Head Group'].unique()
+                # list of head groups metadata
+                hg2_list = []
+                for hg in hg_list:
+                    # first sort the O groups (ex: PC, PC O)
+                    if " " in hg:
+                        hg2 = hg.split(" ")[0]    
+                    # sort the 1/2/3 groups(GD, GT)
+                    elif hg[-1] in ['1', '2', '3']:
+                        hg2 = hg[:-1]
+                    # get the hexcer
+                    elif 'Hex' in hg:
+                        hg2 = 'Hex_Cer'  
+                    # get the acylglycerols
+                    elif hg in 'DAG,TAG,MAG':
+                        hg2='DAG,TAG,MAG'
+                    # all others    
+                    else:
+                        hg2 = hg
+                    hg2_list.append(hg2)
+                df_hg = pd.DataFrame({'Head Group': hg_list, 'Head Group 2': hg2_list})
 
-        #         # unsaturation metadata -- merge df_meta with df_hg
-        #         df_meta2 = df_meta.merge(df_hg, on='Head Group')
-        #         # add unsaturation metadata
-        #         df_meta2['Unsaturation 2'] = np.where(df_meta2['Unsaturation'] < 3, df_meta2['Unsaturation'], '>=3')
+                # unsaturation metadata -- merge df_meta with df_hg
+                df_meta2 = df_meta.merge(df_hg, on='Head Group')
+                # add unsaturation metadata
+                df_meta2['Unsaturation 2'] = np.where(df_meta2['Unsaturation'] < 3, df_meta2['Unsaturation'], '>=3')
 
-        #         return df_meta2
+                return df_meta2
 
         with ui.nav_panel("Uploaded Data"):   
             @render.data_frame
@@ -177,16 +178,16 @@ with ui.nav_panel("Upload Data"):
                         chunk = pd.read_csv(file['datapath'])
                         df_list.append(chunk)
                     return pd.concat(df_list, ignore_index=True)
-            
-        # with ui.nav_panel("Row (Lipid) Metadata"):
-        #     @render.data_frame
-        #     def render_df_meta():
-        #         return df_meta_func()
         
         with ui.nav_panel("Column (Experiment) Metadata"):
             @render.data_frame
             def render_df_exps():
                 return df_exps_func()
+            
+        with ui.nav_panel("Row (Lipid) Metadata"):
+            @render.data_frame
+            def render_df_meta():
+                return df_meta_func()
             
         with ui.nav_panel("Final Dataframe"):
             @render.data_frame
