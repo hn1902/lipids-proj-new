@@ -43,7 +43,7 @@ with ui.nav_panel("Upload Data"):
         accept=[".csv"],
         multiple=False,
     )
-    ui.input_numeric("num_idx", "How many index levels are there in your dataframe?", 1)
+    ui.input_numeric("num_idx", "How many columns contain lipid information?", 1)
     ui.input_text("idx_col", "Which column contains individual lipid species?")
     ui.input_numeric("num_col_lvls", "How many levels are there in your header?", 1)
     ui.input_numeric(
@@ -75,30 +75,32 @@ with ui.nav_panel("Upload Data"):
                     for h in input.header():
                         header = pd.read_csv(h['datapath'])
                         header = header.T
+                    df.drop(columns=list(df.columns[~df.columns.isin(header.index)]), inplace=True) #drop any columns not in header
                     if w >= 0:
-                        df.drop(columns=list(df.columns[~df.columns.isin(header.index)]), inplace=True) #drop any columns not in header
                         df.rename(columns=header[w], inplace=True) # rename based on column level
                 df = df.iloc[(input.num_col_lvls() - 1) :]  # drop rows with col names
+                df.fillna(0, inplace=True)
                 df.reset_index(inplace=True)
                 return df
 
             
-        # @reactive.calc
-        # def df_exps_func():
-        #     df = df_func()
-        #     if df is None:
-        #         return 
-        #     else:
-        #         # create list to hold rows for metadata
-        #         row_list = []
-        #         for name in df.columns[1:]:
-        #             # split string to get protein
-        #             p = re.split('-A|_A|-B|_B', name)
-        #             # print(p[0])
-        #             # create row for metadata
-        #             row_list.append({'Exp': name, 'Mutation': p[0]})
-        #         # create metada
-        #         return pd.DataFrame(row_list)
+        @reactive.calc
+        def df_exps_func():
+            if input.pos_data() is None:
+                return 
+            else:
+                if input.header() is None:
+                    df_list = []
+                    for file in input.pos_data():
+                        chunk = pd.read_csv(file["datapath"])
+                        df_list.append(chunk) 
+                    df = pd.concat(df_list, ignore_index=True) # create df
+                    df.drop(columns=list(df.columns[:input.num_idx()]), inplace=True) # get rid of lipid columns
+                    header = df[:input.num_col_lvls()-1]
+                else:
+                    for h in input.header():
+                        header = pd.read_csv(h['datapath'])
+                return header
             
         # @reactive.calc
         # def df_meta_func():
@@ -166,15 +168,27 @@ with ui.nav_panel("Upload Data"):
 
         with ui.nav_panel("Uploaded Data"):   
             @render.data_frame
-            def render_df():
-                return df_func()
+            def render_raw_df():
+                if input.pos_data() is None:
+                    return
+                else:
+                    df_list = []
+                    for file in input.pos_data():
+                        chunk = pd.read_csv(file['datapath'])
+                        df_list.append(chunk)
+                    return pd.concat(df_list, ignore_index=True)
             
         # with ui.nav_panel("Row (Lipid) Metadata"):
         #     @render.data_frame
         #     def render_df_meta():
         #         return df_meta_func()
         
-        # with ui.nav_panel("Column (Experiment) Metadata"):
-        #     @render.data_frame
-        #     def render_df_exps():
-        #         return df_exps_func()
+        with ui.nav_panel("Column (Experiment) Metadata"):
+            @render.data_frame
+            def render_df_exps():
+                return df_exps_func()
+            
+        with ui.nav_panel("Final Dataframe"):
+            @render.data_frame
+            def render_df():
+                return df_func()
