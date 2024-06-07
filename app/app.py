@@ -81,6 +81,7 @@ with ui.nav_panel("Upload Data"):
                 df = df.iloc[(input.num_col_lvls() - 1) :]  # drop rows with col names
                 df.columns.name = 'Mutation'
                 df.fillna(0, inplace=True)
+                df = df.astype('float')
                 df.reset_index(inplace=True)
                 return df
 
