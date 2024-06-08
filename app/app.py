@@ -43,20 +43,11 @@ with ui.nav_panel("Upload Data"):
     #     accept=[".csv"],
     #     multiple=False,
     # )
-    ui.input_numeric("num_idx", "How many columns contain lipid information?", 1)
-    ui.input_text("idx_col", "Which column contains individual lipid species?")
-    ui.input_numeric("num_col_lvls", "How many levels are there in your header?", 1)
-    ui.input_numeric(
-        "main_col_lvl",
-        "Which level of the header would you like to use for the column names?",
-        1,
-    )
 
-    with ui.navset_card_underline(title="Dataframes"):
-
+    with ui.navset_card_underline(title="Dataframes"):   
         @reactive.calc
         def df_func():
-            if input.pos_data() is None:
+            if input.pos_data() is None or input.main_col_lvl() is None or input.cohort_lvl() is None or input.drop_col() is None:
                 return
             else:
                 df_list = []
@@ -66,24 +57,35 @@ with ui.nav_panel("Upload Data"):
                 df = pd.concat(df_list, ignore_index=True)
                 df.set_index(input.idx_col(), inplace=True)
                 df.index.name = 'Sample Name'
-                df.drop(columns=list(df.columns[:input.num_idx() - 1]), inplace=True)
-                w = input.main_col_lvl() - 2 # check row idx of column
+                df.drop(columns=list(df.columns[:input.num_idx() - 1]), inplace=True) # drop index columns
+                df = df[df.columns[~df.columns.isin(input.drop_col())]]
+                w = int(input.main_col_lvl()) - 2 # check row idx of column
+                w2 = int(input.cohort_lvl()) - 2 # check row_idx of cohort column
+                df_cohort = df.copy()
                 if input.header() is None: # use columns in df
                         if w >= 0: # if w < 0, use orginal column name
                             df.columns = list(df.iloc[w]) # set column names based on row idx
+                        if w2 >= 0:
+                            df_cohort.columns = list(df_cohort.iloc[w2]) # set cohort columns
                 else: # use submitted header
                     for h in input.header():
                         header = pd.read_csv(h['datapath'])
                         header = header.T
                     df.drop(columns=list(df.columns[~df.columns.isin(header.index)]), inplace=True) #drop any columns not in header
+                    df_cohort.drop(columns=list(df_cohort.columns[~df_cohort.columns.isin(header.index)]), inplace=True) #drop any columns not in header
                     if w >= 0:
                         df.rename(columns=header[w], inplace=True) # rename based on column level
+                    if w2 >= 0:
+                        df_cohort.rename(columns=header[w2], inplace=True) # rename based on column level
                 df = df.iloc[(input.num_col_lvls() - 1) :]  # drop rows with col names
+                df_cohort = df_cohort.iloc[(input.num_col_lvls() - 1) :]  # drop rows with col names
                 df.columns.name = 'Mutation'
+                df_cohort.columns.name = 'Mutation'
                 df.fillna(0, inplace=True)
-                df = df.astype('float')
+                df_cohort.fillna(0, inplace=True)
+                df_cohort = df_cohort.astype('float')
                 df.reset_index(inplace=True)
-                return df
+                return df, df_cohort
 
             
         @reactive.calc
@@ -102,11 +104,16 @@ with ui.nav_panel("Upload Data"):
                 else:
                     for h in input.header():
                         header = pd.read_csv(h['datapath'])
-                return header
+                h = pd.DataFrame(np.vstack([header.columns, header]))
+                h.columns = [str(l) for l in range(0,len(h.columns))]
+                h.index = h.index + 1
+                h.reset_index(inplace=True)
+                return h
             
         @reactive.calc
         def df_meta_func():
-            df = df_func()
+            df_display, df = df_func()
+            df = df.reset_index()
             if df is None:
                 return
             else:
@@ -117,18 +124,24 @@ with ui.nav_panel("Upload Data"):
                     # get head group, chain length, unsaturation
                     head_group = qual[0]
                     # get chain length
-                    chain_length = qual[1]
-                    if "-" in chain_length:
-                        c = chain_length.split(sep="-")
-                        chain_length = c[1]
-                        head_group += " " + c[0]
-                    chain_length = int(chain_length)
-                    # get unsaturation
-                    unsaturation = qual[2]
-                    if "+" in unsaturation:
-                        u = unsaturation.split(sep="+")
-                        unsaturation = u[0] 
-                    unsaturation = int(unsaturation)
+                    if len(qual) >= 2:
+                        chain_length = qual[1]
+                        if "-" in chain_length:
+                            c = chain_length.split(sep="-")
+                            chain_length = c[1]
+                            head_group += " " + c[0]
+                        chain_length = int(chain_length)
+                        # get unsaturation
+                        if len(qual) >= 3:
+                            unsaturation = qual[2]
+                            if "+" in unsaturation:
+                                u = unsaturation.split(sep="+")
+                                unsaturation = u[0] 
+                            unsaturation = int(unsaturation)
+                        else:
+                            unsaturation=0
+                    else:
+                        chain_length=0
                     # create dict for row and then add to list of rows if not already in there
                     row = {"Sample Name":name, 
                         "Head Group":head_group, 
@@ -168,22 +181,72 @@ with ui.nav_panel("Upload Data"):
 
                 return df_meta2
 
-        with ui.nav_panel("Uploaded Data"):   
-            @render.data_frame
-            def render_raw_df():
-                if input.pos_data() is None:
-                    return
-                else:
-                    df_list = []
-                    for file in input.pos_data():
-                        chunk = pd.read_csv(file['datapath'])
-                        df_list.append(chunk)
-                    return pd.concat(df_list, ignore_index=True)
-        
+        with ui.nav_panel("Uploaded Data"): 
+            with ui.layout_sidebar():
+                with ui.sidebar():
+                    ui.input_numeric("num_idx", "How many columns contain lipid information?", 1)
+                    ui.input_text("idx_col", "Which column contains individual lipid species?")
+                    ui.input_numeric("num_col_lvls", "How many levels are there in your header?", 1)
+
+                @render.data_frame
+                def render_raw_df():
+                    if input.pos_data() is None:
+                        return
+                    else:
+                        df_list = []
+                        for file in input.pos_data():
+                            chunk = pd.read_csv(file['datapath'])
+                            df_list.append(chunk)
+                        return pd.concat(df_list, ignore_index=True)
+                
         with ui.nav_panel("Column (Experiment) Metadata"):
-            @render.data_frame
-            def render_df_exps():
-                return df_exps_func()
+            with ui.layout_sidebar():
+                with ui.sidebar():
+                    ui.input_select("cohort_lvl", "Which level of the header contains cohort names?", choices=[])
+                    ui.input_select("main_col_lvl", "Which level of the header would you like to use for the column names?",choices=[])
+                    ui.input_selectize("drop_col", "Select columns to drop", choices=[], multiple=True)
+
+                @render.data_frame
+                def render_df_exps():
+                    return df_exps_func()
+
+                @reactive.effect
+                def choose_cohort_col():
+                    df_header = df_exps_func()
+                    if df_header is None:
+                        return
+                    else:
+                        col_idx = list(df_header['index'])
+                        ui.update_select('cohort_lvl', choices=col_idx)
+
+                @reactive.effect
+                def choose_main_col():
+                    df_header = df_exps_func()
+                    ccol = input.cohort_lvl()
+                    if df_header is None or ccol is None:
+                        return
+                    else:
+                        col_idx = list(df_header[df_header['index'] != int(ccol)]['index']) 
+                        ui.update_select('main_col_lvl', choices=col_idx)
+
+
+                @reactive.effect
+                def drop_cols():
+                    df_header = df_exps_func()
+                    ccol = input.cohort_lvl() # select returns string, so we convert back to int
+                    mcol = input.main_col_lvl()
+                    if df_header is None or mcol is None or ccol is None:
+                        return
+                    else:
+                        df_h = df_header.set_index('index')
+                        ht = df_h.T
+                        cols = {}
+                        for cohort in ht[int(ccol)].unique():
+                            one = ht[ht[int(ccol)] == cohort][1]
+                            mm = ht[ht[int(ccol)] == cohort][int(mcol)]
+                            cols[cohort] = dict(zip(one,mm))
+                        ui.update_selectize("drop_col", choices=cols)
+
             
         with ui.nav_panel("Row (Lipid) Metadata"):
             @render.data_frame
@@ -193,4 +256,5 @@ with ui.nav_panel("Upload Data"):
         with ui.nav_panel("Final Dataframe"):
             @render.data_frame
             def render_df():
-                return df_func()
+                df_display, df_cohort = df_func()
+                return df_display
