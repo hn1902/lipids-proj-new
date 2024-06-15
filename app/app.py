@@ -165,9 +165,6 @@ with ui.nav_panel("Upload Data"):
                     # get the hexcer
                     elif 'Hex' in hg:
                         hg2 = 'Hex_Cer'  
-                    # get the acylglycerols
-                    elif hg in 'DAG,TAG,MAG':
-                        hg2='DAG,TAG,MAG'
                     # all others    
                     else:
                         hg2 = hg

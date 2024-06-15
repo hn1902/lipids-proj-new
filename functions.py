@@ -502,15 +502,19 @@ def z_score(df_meta, df_p, var, ctrl, row_cluster, renamed_var='', drop_var=[], 
         norm = matplotlib.colors.TwoSlopeNorm(vmin=-2, vcenter=0, vmax=2)    # set center of colorbar at 0
         ticks = [-2, -1, 0, 1, 2]    # set colorbar ticks
         cbar_kws = {'ticks' : ticks}
-
     else:
-        levels = [-30, -20, -10, -2, 2, 10, 20, 30]
-        if outlier:
-            colors = sns.color_palette('PRGn', 9)
-            cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors, extend='both')
-        else:
-            colors = sns.color_palette('PRGn', 7) 
-            cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors)
+        n = max(non_inf_max, abs(non_inf_min))
+        n = int(n) + 1
+        cmap, norm = maskedcmap(vmin=-n, vmax=n)
+        levels = [-n, -((n+2)/2), -2, 2, (n+2)/2, n]
+        # # discrete scale code
+        # levels = [-30, -20, -10, -2, 2, 10, 20, 30]
+        # if outlier:
+        #     colors = sns.color_palette('PRGn', 9)
+        #     cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors, extend='both')
+        # else:
+        #     colors = sns.color_palette('PRGn', 7) 
+        #     cmap, norm = matplotlib.colors.from_levels_and_colors(levels, colors)
         cbar_kws = {'ticks' : levels}
 
     # plot heatmap
@@ -566,3 +570,15 @@ def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purpleg
         width=500,
         title={'text':title, 'subtitle':subtitle}
     )
+
+def maskedcmap(vmin, vmax, cmap='PRGn'):
+    import matplotlib as mpl
+    import numpy as np 
+
+    cmap = mpl.cm.get_cmap(cmap, 256)
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    maskedcolors = cmap(np.linspace(0, 1, 256))
+    white = np.array([0.966320645905421, 0.9680891964628989, 0.9658592848904267, 1.0])
+    maskedcolors[int(round(norm(-2) * 256)) : int(round(norm(2) * 256)) + 1] = white
+    maskedcmp = mpl.colors.ListedColormap(maskedcolors)
+    return maskedcmp, norm
