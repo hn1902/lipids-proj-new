@@ -2,6 +2,7 @@ import seaborn as sns
 import pandas as pd
 import re
 import numpy as np
+import matplotlib.pyplot as plt
 
 from shiny import reactive
 from shiny.express import input, render, ui
@@ -255,3 +256,58 @@ with ui.nav_panel("Upload Data"):
             def render_df():
                 df_display, df_cohort = df_func()
                 return df_display
+            
+with ui.nav_panel("PCA"):
+    @reactive.calc
+    def pca_func():
+        df, df_cohort = df_func()
+
+        '''Standardize Dataframe'''
+        from sklearn.preprocessing import StandardScaler
+        df_standardized = df_cohort.T
+        exps = df_standardized.index
+
+        x = df_standardized.values
+        print(x.shape)
+        x = StandardScaler().fit_transform(x)
+
+        '''PCA-Dataframe'''
+        from sklearn.decomposition import PCA
+        pca_lipids = PCA(n_components=3)
+        pca=pca_lipids.fit_transform(x)
+        # create dataframe with principal components
+        df_pca = pd.DataFrame(pca)
+        pcs = ['Principal Component 1', 'Principal Component 2', 'Principal Component 3']
+        df_pca.columns=pcs
+        df_pca['Mutation'] = exps
+
+        '''Explained Variance'''
+        ev = pca_lipids.explained_variance_ratio_
+
+        return df_pca, ev
+
+    with ui.layout_columns():
+        with ui.card():
+            ui.card_header('Explained Variance')
+            @render.code
+            def ev_text():
+                df_pca, ev = pca_func()
+                return 'Explained variance per principal component:\nPC 1: {}\nPC 2: {}\nPC 3: {}'.format(ev[0],ev[1],ev[2])
+
+            @render.plot
+            def ev_graph():
+                df_pca, ev = pca_func()
+                plt.figure(figsize=(4,5))
+                plt.bar(
+                    x=['PC 1', 'PC 2', 'PC 3'],
+                    height=ev
+                )
+                plt.title('Explained Variance')
+
+
+
+
+
+
+with ui.nav_panel("Head Group"):
+    "Donut chart (Normalized) + Heatmap (Normalized) + Z-Score\nadd option to drop head groups"
