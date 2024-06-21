@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+import functions
 
 from shiny import reactive
 from shiny.express import input, render, ui
@@ -303,6 +304,34 @@ with ui.nav_panel("PCA"):
                     height=ev
                 )
                 plt.title('Explained Variance')
+        
+        with ui.card():
+            ui.card_header('PCA - 2D')
+            @render.plot
+            def pca2():
+                df_pca, ev = pca_func()
+                i = 0
+                fig, ax_nstd = plt.subplots(figsize=(5,5))
+                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+
+                for protein in df_pca['Mutation'].unique():
+                    x = df_pca[df_pca['Mutation'] == protein]['Principal Component 1']
+                    y = df_pca[df_pca['Mutation'] == protein]['Principal Component 2']
+                    
+                    ax_nstd.scatter(x, y, color=colors[i])
+                    functions.confidence_ellipse(x, y, ax_nstd, n_std=3,
+                                label=protein, alpha=0.5, facecolor=colors[i], edgecolor=colors[i], linestyle=':')
+                    i += 1
+
+
+                ax_nstd.grid()
+                ax_nstd.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+                ax_nstd.set_title('Principal Components Analysis with 95% Confidence Interval')
+                ax_nstd.set_xlabel('Principal Component 1 ({:.0%})'.format(ev[0]))
+                ax_nstd.set_ylabel('Principal Component 2 ({:.0%})'.format(ev[1]))
+                #plt.show()
+
 
 
 
