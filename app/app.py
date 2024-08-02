@@ -368,11 +368,7 @@ with ui.nav_panel("PCA"):
                     ax_nstd.set_ylabel('Principal Component 2 ({:.0%})'.format(ev[1]))
                     ax_nstd.set_zlabel('Principal Component 3 ({:.0%})'.format(ev[2]))
 
-
-
-
-
-
-
 with ui.nav_panel("Head Group"):
-    "Donut chart (Normalized) + Heatmap (Normalized) + Z-Score\nadd option to drop head groups"
+    @render.code
+    def stuff():
+        return "Donut chart (Normalized) + Heatmap (Normalized) + Z-Score\n+add option to drop head groups"
