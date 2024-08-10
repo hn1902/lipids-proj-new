@@ -395,7 +395,7 @@ def fold_change(df_meta, df_p, var, mtn, row_cluster, renamed_var='', drop_var=[
         vmax=vmax, 
         row_cluster=row_cluster, 
     ).fig.suptitle(
-            'Heatmap of {var_name}, log(Fold Change from CAS9)'.format(var_name=var), 
+            'Heatmap of {var_name}, log(Fold Change from {ctrl})'.format(var_name=var, ctrl=mtn), 
             y=1.05
     )
                                                    
@@ -533,7 +533,7 @@ def z_score(df_meta, df_p, var, ctrl, row_cluster, renamed_var='', drop_var=[], 
 
     return dfz
     
-def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purplegreen', cmap_mid=0):
+def altair_heatmap(dfz, var, var_type, val, row_sort=False, title='', subtitle='', cmap='purplegreen', cmap_mid=0):
     '''
     Creates an altair heatmap from a fold change or z-score dataframe.
 
@@ -547,6 +547,8 @@ def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purpleg
         Variable type for y. Options are 'quantitative', 'ordinal', 'nominal'.
     val: str
         Name for value of interest (ex: Z-Score, log(Fold Change))
+    row_sort: boolean, optional
+        Whether or not to sort rows by y-value in descending order
     title : str
         Chart title
     subtitle: str, optional
@@ -560,16 +562,29 @@ def altair_heatmap(dfz, var, var_type, val, title='', subtitle='', cmap='purpleg
 
     source = dfz.reset_index().melt(var, value_name=val)
 
-    alt.Chart(source).mark_rect().encode(
-        x='Mutation:N',
-        y=alt.Y(var, type=var_type),
-        color=alt.Color(val, type='quantitative').scale(scheme=cmap, domainMid=cmap_mid),
-        tooltip=['Mutation', var, 'Z-Score']
-    ).properties(
-        height=500,
-        width=500,
-        title={'text':title, 'subtitle':subtitle}
-    )
+    if row_sort:
+        f = alt.Chart(source).mark_rect().encode(
+            x='Mutation:N',
+            y=alt.Y(var, type=var_type, sort=alt.EncodingSortField(field=val, order='descending')),
+            color=alt.Color(val, type='quantitative').scale(scheme=cmap, domainMid=cmap_mid),
+            tooltip=['Mutation', var, val]
+            ).properties(
+                height=500,
+                width=500,
+                title={'text':title, 'subtitle':subtitle}
+            )
+    else:
+        f = alt.Chart(source).mark_rect().encode(
+            x='Mutation:N',
+            y=alt.Y(var, type=var_type),
+            color=alt.Color(val, type='quantitative').scale(scheme=cmap, domainMid=cmap_mid),
+            tooltip=['Mutation', var, val]
+            ).properties(
+                height=500,
+                width=500,
+                title={'text':title, 'subtitle':subtitle}
+            )
+    return f
 
 def maskedcmap(vmin, vmax, cmap='PRGn'):
     import matplotlib as mpl
