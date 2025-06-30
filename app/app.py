@@ -190,8 +190,9 @@ with ui.nav_panel("Upload Data"):
                         ui.input_text("idx_col", "Which column contains individual lipid species?")
                         ui.input_numeric("num_col_lvls", "How many levels are there in your header?", 1)
 
+                    
                     @render.data_frame
-                    def render_raw_df():
+                    def render_raw_df(): # view uploaded (raw) data
                         if input.pos_data() is None:
                             return
                         else:
