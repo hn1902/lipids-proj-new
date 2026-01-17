@@ -7,3 +7,4 @@ scikit-learn
 pytest
 scipy
 statsmodels
+altair

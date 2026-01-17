@@ -57,25 +57,19 @@ def odd_chain_fraction(df_meta: pd.DataFrame, df_cohort: pd.DataFrame) -> pd.Dat
     df_long['Odd'] = df_long['Acyl Chain Length'] % 2 == 1
     # sum abundances by Cohort and oddness
     s = df_long.groupby(['Cohort', 'Odd'])['Abundance'].sum().unstack(fill_value=0)
-    s.columns = ['Even', 'Odd'] if False else s.columns
-    # ensure columns
-    if True:
-        if True not in s.columns and False not in s.columns:
-            # no odd/even split available
-            pass
-    # reorder columns
-    cols = []
-    if True in s.columns:
-        cols.append(True)
-    if False in s.columns:
-        cols.append(False)
-    # create even/odd mapping
-    s2 = pd.DataFrame()
-    s2['Odd'] = s.get(True, 0)
-    s2['Even'] = s.get(False, 0)
-    s2['FractionOdd'] = s2['Odd'] / (s2['Odd'] + s2['Even']).replace(0, np.nan)
-    s2.fillna(0, inplace=True)
-    return s2
+    
+    # Rename columns from boolean to string
+    s.rename(columns={True: 'Odd', False: 'Even'}, inplace=True)
+
+    # Ensure both 'Odd' and 'Even' columns exist
+    if 'Odd' not in s.columns:
+        s['Odd'] = 0
+    if 'Even' not in s.columns:
+        s['Even'] = 0
+
+    s['FractionOdd'] = s['Odd'] / (s['Odd'] + s['Even']).replace(0, np.nan)
+    s.fillna(0, inplace=True)
+    return s
 
 
 def subset_headgroup_by_chain(df_meta: pd.DataFrame, df_sample: pd.DataFrame, df_cohort: pd.DataFrame, condition) -> pd.DataFrame:
